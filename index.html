@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU x Inference Engine Comparison - local LLM</title>
+<style>
+:root{--bg:#0d1117;--card:#161b22;--border:#2d333b;--fg:#e6edf3;--dim:#9da7b3;--acc:#58a6ff;--gap:#b8860b;--good:#3fb950}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;padding:0 12px 60px}
+a{color:var(--acc);text-decoration:none}
+a:hover{text-decoration:underline}
+header{max-width:900px;margin:0 auto;padding:28px 0 8px}
+h1{font-size:1.45rem}
+.sub{color:var(--dim);margin-top:6px;font-size:.9rem}
+nav{position:sticky;top:0;background:var(--bg);z-index:5;padding:10px 0;border-bottom:1px solid var(--border);max-width:900px;margin:0 auto;display:flex;gap:8px;flex-wrap:wrap}
+nav a{border:1px solid var(--border);border-radius:16px;padding:4px 12px;font-size:.85rem;color:var(--fg)}
+main{max-width:900px;margin:0 auto}
+section{margin-top:34px}
+h2{font-size:1.15rem;border-bottom:1px solid var(--border);padding-bottom:6px}
+.verd{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--good);border-radius:8px;padding:12px 14px;margin:12px 0;font-size:.92rem}
+.verd b{color:var(--good)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:10px 0}
+.card h3{font-size:.98rem;margin-bottom:6px}
+.kv{display:grid;grid-template-columns:92px 1fr;gap:3px 10px;font-size:.88rem}
+.kv div:nth-child(odd){color:var(--dim)}
+.q{color:var(--dim);font-size:.83rem;margin-top:8px;border-top:1px dashed var(--border);padding-top:7px}
+.src{font-size:.78rem;margin-top:8px}
+.gaprow{border-left:3px solid var(--gap)}
+.gapbadge{color:var(--gap);font-weight:600}
+.caveats li{margin:7px 0 7px 18px;font-size:.9rem}
+footer{margin-top:44px;color:var(--dim);font-size:.8rem;text-align:center}
+@media(min-width:760px){h1{font-size:1.7rem}}
+</style>
+</head>
+<body>
+<header>
+<h1>GPU x Inference Engine Comparison</h1>
+<p class="sub">7900 XTX vs 3090 vs 5060 Ti 16GB vs R9700 vs 5090 across Strata, Basalt, Maya, Avalon and friends. Every measured number links its source. Gaps are marked as gaps. Updated 20 Nov 2026.</p>
+</header>
+<nav id="nav"></nav>
+<main id="main"></main>
+<footer>Built from community benchmarks and prior research digests. Models and quants differ per row - compare within a GPU section, not across.</footer>
+<script src="data.js"></script>
+<script>
+const ORDER=[["5090","RTX 5090 (32 GB)"],["xtx","RX 7900 XTX (24 GB)"],["3090","RTX 3090 (24 GB)"],["5060ti","RTX 5060 Ti (16 GB)"],["r9700","Radeon AI PRO R9700 (32 GB)"]];
+const nav=document.getElementById('nav'),main=document.getElementById('main');
+for(const [id,label] of ORDER){nav.insertAdjacentHTML('beforeend',`<a href="#${id}">${label.split('(')[0].trim()}</a>`)}
+nav.insertAdjacentHTML('beforeend',`<a href="#engines">Engines</a><a href="#caveats">Caveats</a>`);
+function srcLinks(r){let h=`<a href="${SOURCES[r.src].url}">${SOURCES[r.src].label}</a>`;if(r.src2)h+=` &middot; <a href="${SOURCES[r.src2].url}">${SOURCES[r.src2].label}</a>`;return h}
+for(const [id,label] of ORDER){
+  const v=VERDICTS.find(x=>x.gpu===id);
+  let h=`<section id="${id}"><h2>${label}</h2>`;
+  if(v)h+=`<div class="verd"><b>Pick:</b> ${v.text}</div>`;
+  for(const r of ROWS.filter(x=>x.gpu===id)){
+    h+=`<div class="card${r.gap?' gaprow':''}"><h3>${r.engine}</h3><div class="kv">
+    <div>Model</div><div>${r.model}</div>
+    <div>Decode</div><div>${r.decode==='GAP'?'<span class="gapbadge">GAP - no published numbers</span>':r.decode+' tok/s'}</div>
+    ${r.prefill&&r.prefill!=='-'?`<div>Prefill</div><div>${r.prefill}</div>`:''}
+    ${r.ctx&&r.ctx!=='-'?`<div>Context</div><div>${r.ctx}</div>`:''}</div>
+    ${r.quality?`<div class="q">${r.quality}</div>`:''}
+    <div class="src">Source: ${srcLinks(r)}</div></div>`;
+  }
+  main.insertAdjacentHTML('beforeend',h+'</section>');
+}
+let eh=`<section id="engines"><h2>Engine directory</h2>`;
+for(const e of ENGINES)eh+=`<div class="card"><h3><a href="${e.url}">${e.name}</a></h3><div style="font-size:.9rem">${e.note}</div></div>`;
+main.insertAdjacentHTML('beforeend',eh+'</section>');
+main.insertAdjacentHTML('beforeend',`<section id="caveats"><h2>Caveats</h2><ul class="caveats">
+<li>Numbers are community and self-reported benches, mostly one person, one box. Treat +/-10% as noise.</li>
+<li>Models differ by row: Flash-Next (125B-class MoE), dense Qwen3.8-27B, Qwen3.5-9B, GLM and DeepSeek rows are not cross-comparable.</li>
+<li>Basalt's 7-engine table is vendor-published; an independent r/LocalLLaMA run reproduced the ordering.</li>
+<li>Quality findings (quant plateau above ~3 bits on agentic coding) come from one private bench, ~8,000 scored runs.</li>
+<li>Basalt, capy-flash and ninfer need Blackwell (sm_120). They cannot run on 3090, 7900 XTX or R9700 today.</li>
+<li>Where nobody has published a number, the row says GAP instead of guessing.</li>
+</ul></section>`);
+</script>
+</body>
+</html>
